@@ -2,15 +2,15 @@ bl_info = {
 	"name": "Koikatsu to PES",
 	"category": "Rigging",
 	"author": "MFG",
-	"version": "0.0.2"
+	"version": "0.0.3"
 }
 
 import bpy, fnmatch
 
-def doTheThing(context, booby_physics=False):
+def doTheThing(context, booba_factor=0.0):
 	obj = context.active_object
 
-	rename = {
+	remap = {
 		"cf_s_shoulder02_L": "sk_shoulder_l",
 		"cf_s_arm01_L": "dsk_upperarm_l",
 		"cf_s_arm03_L": "sk_upperarm_l",
@@ -73,19 +73,7 @@ def doTheThing(context, booby_physics=False):
 		"RingFinger3_L": "skh_ring_dip_l",
 		"LittleFinger1_L": "skh_pinky_mcp_l",
 		"LittleFinger2_L": "skh_pinky_pip_l",
-		"LittleFinger3_L": "skh_pinky_dip_l"
-	}
-
-	mix_to = {}
-
-	for i in obj.vertex_groups:
-		if i.name in rename:
-			i.name = rename[i.name]
-			mix_to[i.name] = i
-		elif i.name in rename.values():
-			mix_to[i.name] = i
-
-	mix = {
+		"LittleFinger3_L": "skh_pinky_dip_l",
 		"cf_s_arm02_L": "dsk_upperarm_l",
 		"cf_s_forearm01_L": "sk_forearm_l",
 		"cf_s_elboback_L": "dsk_elbow_l",
@@ -138,6 +126,18 @@ def doTheThing(context, booby_physics=False):
 		"cf_s_leg_R"
 	]
 
+	mix_to = {}
+
+	#populate mix_to with the first match for a VG remap or existing remapped VGs
+	for vg in obj.vertex_groups:
+		if vg.name in remap:
+			new_name = remap[vg.name]
+			if not new_name in mix_to:
+				vg.name = new_name
+				mix_to[new_name] = vg
+		elif vg.name in remap.values():
+			mix_to[vg.name] = vg
+
 	def delete_and_normalize(vg):
 		print('Removing '+vg.name)
 		obj.vertex_groups.remove(vg)
@@ -155,7 +155,7 @@ def doTheThing(context, booby_physics=False):
 		if delete: delete_and_normalize(b)
 
 	def get_in_mix(vg):
-		if vg.name in mix: return mix_to[mix[vg.name]]
+		if vg.name in remap: return mix_to[remap[vg.name]]
 		return None
 
 	def wildcard_match(vg):
@@ -164,22 +164,27 @@ def doTheThing(context, booby_physics=False):
 				return mix_to[wildcard_mix[pattern]]
 		return None
 
-	for i in obj.vertex_groups:
-		if not i.name in rename.values():
-			to = get_in_mix(i)
-			if to is None:
-				to = wildcard_match(i)
-			if to is not None:
-				weight_mix(to, i)
-			elif i.name in delete_list:
-				delete_and_normalize(i)
+	#delete VGs
+	for vg in obj.vertex_groups:
+		if vg.name in delete_list:
+				delete_and_normalize(vg)
 
+	#remap VGs
+	for vg in obj.vertex_groups:
+		if not vg.name in remap.values():
+			to = get_in_mix(vg)
+			if to is None:
+				to = wildcard_match(vg)
+			if to is not None:
+				weight_mix(to, vg)
+
+	#create breast movement or mix it back to sk_chest
 	if 'breast_l' in mix_to:
-		if booby_physics:
-			weight_mix(mix_to['sk_chest'], mix_to['breast_l'], weight=0.9, delete=False)
-			weight_mix(mix_to['sk_thigh_l'], mix_to['breast_l'], weight=0.1)
-			weight_mix(mix_to['sk_chest'], mix_to['breast_r'], weight=0.9, delete=False)
-			weight_mix(mix_to['sk_thigh_r'], mix_to['breast_r'], weight=0.1)
+		if booba_factor > 0.0:
+			weight_mix(mix_to['sk_chest'], mix_to['breast_l'], weight=(1-booba_factor), delete=False)
+			weight_mix(mix_to['sk_thigh_l'], mix_to['breast_l'], weight=booba_factor)
+			weight_mix(mix_to['sk_chest'], mix_to['breast_r'], weight=(1-booba_factor), delete=False)
+			weight_mix(mix_to['sk_thigh_r'], mix_to['breast_r'], weight=booba_factor)
 		else:
 			weight_mix(mix_to['sk_chest'], mix_to['breast_l'])
 			weight_mix(mix_to['sk_chest'], mix_to['breast_r'])
@@ -203,8 +208,10 @@ class KoikatsuToPESformaDeHorny(bpy.types.Operator):
 	bl_label = "PESify Koikatsu vertex groups (w/ Booby Jiggles)"
 	bl_options = {'REGISTER', 'UNDO'}
 
+	booba_factor = bpy.props.FloatProperty(name = "Booba Factor", min = 0.0, max = 1.0, default = 0.1, description="Amount of weight to assign to sk_thigh_l/r, values larger than 0.2 are probably retarded")
+
 	def execute(self, context):
-		doTheThing(context, booby_physics=True)
+		doTheThing(context, booba_factor=self.booba_factor)
 
 		return {'FINISHED'}
 
